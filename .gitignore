@@ -1,2 +1,52 @@
-outputs
-results
+# Python-spezifische Dateien
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Umgebungsspezifische Dateien
+.env
+.venv
+env/
+venv/
+ENV/
+.conda/
+
+# CDSW/Cloudera-spezifische Dateien
+.Rprofile
+.bash_history
+.cache/
+.ipython/
+.jupyter/
+.local/
+.npm/
+.nv/
+.pip/
+.py
+
+# Projektspezifische Dateien
+data/
+outputs/
+results/
+
+# Spezifische Dateien
+check_gpu.py

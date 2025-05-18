@@ -19,41 +19,36 @@ n_mels = 128
 hop_length = 512
 #n_mfcc = 42
 
-'''model_constructor = "AudioMLP(n_steps=431,\
-n_mels=config.n_mels,\
-hidden1_size=512,\
-hidden2_size=128,\
-output_size=config.n_classes,\
-time_reduce=1)"'''
-
-# Neues CNN-Modell
+# Use our improved ResNet-style CNN
 model_constructor = "AudioCNN(n_mels=config.n_mels, output_size=config.n_classes)"
 
 # ###TRAINING
 # ratio to split off from training data
 val_size = .2  # could be changed
 device_id = 0
-batch_size = 32
-#batch_size = 64
+#batch_size = 32
+batch_size = 64
 # in Colab to avoid Warning
 #num_workers = 2
-num_workers = 0
-#num_workers = 4
+#num_workers = 0
+num_workers = 4
 # for local Windows or Linux machine
 # num_workers = 6#16
-#persistent_workers = True
-persistent_workers = False
+persistent_workers = True
+#persistent_workers = False
 epochs = 200
 #epochs = 1
 # early stopping after epochs with no improvement
 #patience = 20
-patience = 15
-lr = 1e-3
-#weight_decay = 1e-3
+patience = 20  # Increased patience for the more complex model
+lr = 5e-4  # Adjusted learning rate
 weight_decay = 1e-4
 warm_epochs = 10
-gamma = 0.8
-step_size = 5
+gamma = 0.9  # Adjusted scheduler gamma
+step_size = 10  # Adjusted step size
+
+# Verwenden Sie Mixed Precision Training, um GPU-Speicher zu sparen und Geschwindigkeit zu erhöhen
+use_mixed_precision = True
 
 # ### TESTING
 # model checkpoints loaded for testing

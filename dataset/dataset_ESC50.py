@@ -11,8 +11,9 @@ import librosa
 
 import config
 from . import transforms
+from .spec_augment import SpecAugment
 
-# CUDA for PyTorch
+# CUDA für PyTorch
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -100,12 +101,11 @@ class ESC50(data.Dataset):
                 transforms.RandomCrop(out_len=out_len)
             )
 
+            # Enhanced spec transforms with SpecAugment
             self.spec_transforms = transforms.Compose(
-                # to Tensor and prepend singleton dim
-                #lambda x: torch.Tensor(x).unsqueeze(0),
-                # lambda non-pickleable, problem on windows, replace with partial function
                 torch.Tensor,
                 partial(torch.unsqueeze, dim=0),
+                SpecAugment(freq_mask_param=8, time_mask_param=20)  # Added SpecAugment
             )
 
         else:
@@ -168,7 +168,6 @@ class ESC50(data.Dataset):
                                                n_mels=config.n_mels,
                                                n_fft=1024,
                                                hop_length=config.hop_length,
-                                               #center=False,
                                                )
             log_s = librosa.power_to_db(s, ref=np.max)
 
@@ -181,7 +180,19 @@ class ESC50(data.Dataset):
         if self.global_mean:
             feat = (feat - self.global_mean) / self.global_std
 
+        # Konvertiere zu Tensor (falls noch nicht geschehen)
+        if not isinstance(feat, torch.Tensor):
+            feat = torch.tensor(feat, dtype=torch.float)
+            
         return file_name, feat, class_id
+
+
+# Die Vorverarbeitung in den Datenloader-Batches auslagern
+def collate_fn(batch):
+    filenames, features, labels = zip(*batch)
+    features = torch.stack([torch.tensor(feat, dtype=torch.float) for feat in features])
+    labels = torch.tensor(labels, dtype=torch.long)
+    return filenames, features, labels
 
 
 def get_global_stats(data_path):

@@ -16,6 +16,9 @@ from models.utils import EarlyStopping, Tee
 from dataset.dataset_ESC50 import ESC50
 import config
 
+from dataset.dataset_ESC50 import collate_fn
+
+from torch.cuda.amp import GradScaler, autocast
 
 # mean and std of train data for every fold
 global_stats = np.array([[-54.364834, 20.853344],
@@ -88,28 +91,64 @@ def train_epoch():
 
 def fit_classifier():
     num_epochs = config.epochs
+    
+    # Initialisieren Sie den Skalierer für Mixed Precision Training
+    scaler = GradScaler() if use_cuda and config.use_mixed_precision else None
 
     loss_stopping = EarlyStopping(patience=config.patience, delta=0.002, verbose=True, float_fmt=float_fmt,
-                                  checkpoint_file=os.path.join(experiment, 'best_val_loss.pt'))
+                                checkpoint_file=os.path.join(experiment, 'best_val_loss.pt'))
 
     pbar = tqdm(range(1, 1 + num_epochs), ncols=50, unit='ep', file=sys.stdout, ascii=True)
     for epoch in (range(1, 1 + num_epochs)):
-        # iterate once over training data
-        train_acc, train_loss = train_epoch()
+        # Training-Loop mit Mixed Precision
+        model.train()
+        losses = []
+        corrects = 0
+        samples_count = 0
+        
+        for _, x, label in tqdm(train_loader, unit='bat', disable=config.disable_bat_pbar, position=0):
+            x = x.float().to(device)
+            y_true = label.to(device)
 
-        # validate model
+            # Nullen Sie die Gradienten zurück
+            optimizer.zero_grad()
+            
+            # Verwenden Sie autocast für Mixed Precision, falls aktiviert
+            if scaler is not None:
+                with autocast():
+                    # Forward-Pass durch das Modell
+                    y_prob = model(x)
+                    loss = criterion(y_prob, y_true)
+                
+                # Skalieren Sie die Gradienten und führen Sie Backpropagation durch
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                # Ohne Mixed Precision - der ursprüngliche Code
+                y_prob = model(x)
+                loss = criterion(y_prob, y_true)
+                loss.backward()
+                optimizer.step()
+                
+            losses.append(loss.item())
+            y_pred = torch.argmax(y_prob, dim=1)
+            corrects += (y_pred == y_true).sum().item()
+            samples_count += y_true.shape[0]
+
+        train_acc = corrects / samples_count
+        
+        # Validierungscode bleibt unverändert
         val_acc, val_loss, _ = test(model, val_loader, criterion=criterion, device=device)
         val_loss_avg = np.mean(val_loss)
 
-        # print('\n')
+        # Rest des Codes bleibt unverändert...
         pbar.update()
-        # pbar.refresh() syncs output when pbar on stderr
-        # pbar.refresh()
         print(end=' ')
-        print(  # f" Epoch: {epoch}/{num_epochs}",
+        print(
             f"TrnAcc={train_acc:{float_fmt}}",
             f"ValAcc={val_acc:{float_fmt}}",
-            f"TrnLoss={np.mean(train_loss):{float_fmt}}",
+            f"TrnLoss={np.mean(losses):{float_fmt}}",
             f"ValLoss={val_loss_avg:{float_fmt}}",
             end=' ')
 
@@ -120,9 +159,10 @@ def fit_classifier():
             print("Early stopping")
             break
 
-        # advance the optimization scheduler
+        # Advance the optimization scheduler
         scheduler.step()
-    # save full model
+    
+    # Save full model
     torch.save(model.state_dict(), os.path.join(experiment, 'terminal.pt'))
 
 
@@ -171,21 +211,26 @@ if __name__ == "__main__":
             print('random wave cropping')
 
             train_loader = torch.utils.data.DataLoader(train_set,
-                                                       batch_size=config.batch_size,
-                                                       shuffle=True,
-                                                       num_workers=config.num_workers,
-                                                       drop_last=False,
-                                                       persistent_workers=config.persistent_workers,
-                                                       pin_memory=True,
-                                                       )
+                                         batch_size=config.batch_size,
+                                         shuffle=True,
+                                         num_workers=config.num_workers,
+                                         drop_last=False,
+                                         persistent_workers=True,  # Ändern auf True
+                                         pin_memory=True,
+                                         prefetch_factor=2,  # Neu hinzugefügt
+                                         collate_fn=collate_fn,  # Neu hinzugefügt
+                                         )
 
             val_loader = torch.utils.data.DataLoader(get_fold_dataset(subset="val"),
-                                                     batch_size=config.batch_size,
-                                                     shuffle=False,
-                                                     num_workers=config.num_workers,
-                                                     drop_last=False,
-                                                     persistent_workers=config.persistent_workers,
-                                                     )
+                                       batch_size=config.batch_size,
+                                       shuffle=False,
+                                       num_workers=config.num_workers,
+                                       drop_last=False,
+                                       persistent_workers=True,  # Ändern auf True
+                                       pin_memory=True,
+                                       prefetch_factor=2,  # Neu hinzugefügt
+                                       collate_fn=collate_fn,  # Neu hinzugefügt
+                                       )
 
             print()
             # instantiate model

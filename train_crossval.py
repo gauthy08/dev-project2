@@ -240,7 +240,7 @@ if __name__ == "__main__":
             print('*****')
 
             # Define a loss function and optimizer
-            criterion = nn.CrossEntropyLoss().to(device)
+            criterion = nn.CrossEntropyLoss(label_smoothing=config.label_smoothing).to(device)
 
             '''optimizer = torch.optim.SGD(model.parameters(),
                                         lr=config.lr,

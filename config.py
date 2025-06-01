@@ -47,6 +47,8 @@ warm_epochs = 10
 gamma = 0.9  # Adjusted scheduler gamma
 step_size = 10  # Adjusted step size
 
+label_smoothing = 0.1
+
 # Verwenden Sie Mixed Precision Training, um GPU-Speicher zu sparen und Geschwindigkeit zu erhöhen
 use_mixed_precision = True
 
